@@ -23,6 +23,7 @@ def rnd(a, b):
 
 class Star:
     def __init__(self):
+        self.name = None
         self.spectral_class = None
         self.size_code = None
         self.spectral_specification = None
@@ -2821,14 +2822,16 @@ def constellation_wrapper(density, number, start):
 
         proceed = True
         import random
-
-        seed_random(system.number + start)
         while proceed:
             x = round(-length / 2 + random.uniform(0, length), 4)
             y = round(-length / 2 + random.uniform(0, length), 4)
             z = round(-length / 2 + random.uniform(0, length), 4)
             system.pos = x, y, z
             proceed = check_pas(store, system)
+
+    def name_star(system, num):
+        for star in system.content:
+            star.name = str(num) + str(star.classification)
 
     constellation = []
     for i in range(start, start + number):
@@ -2841,6 +2844,7 @@ def constellation_wrapper(density, number, start):
         age(new_system)
         assign_orbit(new_system)
         planet_wrapper(new_system)
+        name_star(new_system, i)
         constellation.append(new_system)
 
     return constellation
@@ -3280,21 +3284,14 @@ def handle_input():
     return density, number, start, gist, filter_option, write_to_file
 
 
-def main(export=False):
-
-    import time
-
-    while True:
-
-        density, number, start, gist, filter_option, write_to_file = handle_input()
-        constellation = constellation_wrapper(density, number, start)
-        print("\nFinished!\n")
-        print_wrapper(constellation, number, start, gist, filter_option, write_to_file)
-    if export:
-        return constellation
+def generate():
+    density, number, start, gist, filter_option, write_to_file = handle_input()
+    constellation = constellation_wrapper(density, number, start)
+    print("\nFinished!\n")
+    print_wrapper(constellation, number, start, gist, filter_option, write_to_file)
+    return constellation
 
 
 if __name__ == "__main__":
-    main(export=False)
-else:
-    main(export=True)
+    while True:
+        generate()

@@ -7,34 +7,6 @@ G = 2.8240 * 10 ** -7  # au^3/Mj*day^2
 resolution = [1200, 600]
 
 
-class Constant:
-    # deprecated, delete as soon as possible.
-    background = "black"
-    tracing = True
-    text = "white"
-    scale = None
-    center = [0, 0]
-    pause = False
-    save = False
-    force_update = False
-    update = True
-    repeat = False
-    center_z = [0, 0]
-    disp_md = None
-    window_size = 300
-    mode = "Normal"
-    disp_counter = 0
-    proceed = True
-    save_to_excel = None
-    run_length = None
-    dt = None
-    method = None
-    fast = False
-    delay = 1
-    screen_process = None
-    pix_ratio = 1
-
-
 class Celestial(object):
     def __init__(self):
         self.name = "Undefined"
@@ -72,10 +44,13 @@ class Celestial(object):
         self.acc = grav(self, targets)
         self.vel = self.vel + (currAcc + self.acc) / 2 * dt
 
-    def cordFromEphem(self, name, mu, mass, sma, ecc, i, loan, aop, ta):
-        # sma:semi major axis, ecc:eccentricity, ta:true anomaly,
-        # i:inclination,loan:longtitude of ascending node aop:argument of periapsis
-        # angular unit in radian, mass in Mj and length in AU"""
+    def cordFromEphem(self, name, mm, mass, sma, ecc, i, loan, aop, ta):
+        """ mm: mass of attractor, in Mj
+            sma:semi major axis, ecc:eccentricity, ta:true anomaly,
+            i:inclination,loan:longtitude of ascending node aop:argument of periapsis
+            angular unit in radian, mass in Mj and length in AU"""
+
+        mu = mm * G
 
         def cart2spher(tupled_cart):
             import math
@@ -145,71 +120,116 @@ class Celestial(object):
         self.vel = v_3d
 
 
-def datastream(ephem, dt, fps):
+def datastream(constellation, dt, tps, fps):
+    """dt:delta time,used for physical calculation
+        tps:actual physical update per second
+        fps:updates graphics per second
+        update per frame = tps / fps and should be positive integer.
+        """
     import turtle
+    keep = True
+    try:
 
-    def streamdata():
-
-        for star in ephem:
-            star.update(ephem, dt)
-
-        worker.clear()
-        worker.setpos(0, resolution[1] / 2)
-
-        for star in ephem:
-            worker.setheading(270)
-            worker.forward(20)
-            canonSetting = ("Calibri", 14, "normal")
-            x, y, z = star.pos
-            worker.setheading(0)
-            worker.color(star.color)
-            worker.write(str(star.name), align="left", font=canonSetting)
-            worker.color("white")
-            worker.fd(100)
-            worker.write("x:" + str(round(x, 3)), align="left", font=canonSetting)
-            worker.fd(150)
-            worker.write("y:" + str(round(y, 3)), align="left", font=canonSetting)
-            worker.fd(150)
-            worker.write("z:" + str(round(z, 3)), align="left", font=canonSetting)
-            worker.bk(400)
-        gridWorker.clear()
-        gridWorker.color("white")
-        for i in range(0, 3):
-            gridWorker.goto(-resolution[0] / 4, 0)
-            gridWorker.setheading(90 + 135 * i)
-            gridWorker.pd()
-            if i != 1:
-                gridWorker.fd(resolution[0] / 4)
+        def swapbanks():
+            nonlocal ephem
+            currpos = constellation.index(ephem)
+            maxpos = len(constellation)
+            if currpos + 1 == maxpos:
+                ephem = constellation[0]
             else:
-                gridWorker.fd(resolution[0] / 4 / sqrt(2))
-            gridWorker.pu()
-        for star in ephem:
-            x, y, z = star.pos
-            projX = (-x / sqrt(2) + y) * 100
-            projY = (-x / sqrt(2) + z) * 100
-            gridWorker.goto(projX - resolution[0] / 4, projY)
-            gridWorker.dot(5, star.color)
-            gridWorker.pd()
-            gridWorker.setheading(270)
-            gridWorker.fd(z*100)
-            gridWorker.pu()
+                ephem = constellation[currpos + 1]
 
-        screen.update()
+        def exit():
+            nonlocal keep
+            keep = False
+
+        def mkbutton(x0, y0, l, h, text, func_if_clicked):
+            import tkinter as tk
+            from tkinter import font
+
+            cal10 = font.Font(family="Calibri", size=12)
+            canvas = turtle.getcanvas()
+            parent = canvas.master
+            button = tk.Button(
+                parent, text=text, command=func_if_clicked, width=10, font=cal10,
+            ).pack(side=tk.LEFT)
+            id = canvas.create_window((x0, y0), window=button)
+
+        upf = int(tps / fps)
+
+        def streamdata():
+            screen.onclick(None)
+            for i in range(0, upf):
+                for system in constellation:
+                    for star in system:
+                        star.update(system, dt)
+            worker.clear()
+            worker.setpos(0, resolution[1] / 2)
+
+            for star in ephem:
+                worker.setheading(270)
+                worker.forward(20)
+                canonSetting = ("Calibri", 14, "normal")
+                x, y, z = star.pos
+                worker.setheading(0)
+                worker.color(star.color)
+                worker.write(str(star.name), align="left", font=canonSetting)
+                worker.color("white")
+                worker.fd(100)
+                worker.write("x:" + str(round(x, 3)), align="left", font=canonSetting)
+                worker.fd(150)
+                worker.write("y:" + str(round(y, 3)), align="left", font=canonSetting)
+                worker.fd(150)
+                worker.write("z:" + str(round(z, 3)), align="left", font=canonSetting)
+                worker.bk(400)
+            gridWorker.clear()
+            gridWorker.color("white")
+            for i in range(0, 3):
+                gridWorker.goto(-resolution[0] / 4, 0)
+                gridWorker.setheading(90 + 135 * i)
+                gridWorker.pd()
+                if i != 1:
+                    gridWorker.fd(resolution[0] / 4)
+                else:
+                    gridWorker.fd(resolution[0] / 4 / sqrt(2))
+                gridWorker.pu()
+            for star in ephem:
+                gridWorker.color([5, 102, 8])
+                x, y, z = star.pos
+                projX = (-x / sqrt(2) + y) * 100
+                projY = (-x / sqrt(2) + z) * 100
+                gridWorker.goto(projX - resolution[0] / 4, projY)
+                gridWorker.dot(5, star.color)
+                gridWorker.pd()
+                gridWorker.setheading(270)
+                gridWorker.fd(z * 100)
+                gridWorker.goto(-resolution[0] / 4, 0)
+                gridWorker.pu()
+            screen.update()
+            if keep:
+                screen.ontimer(streamdata, int(1000 / fps))
+            else:
+                screen.bye()
+
+        ephem = constellation[0]
+        screen = turtle.Screen()
+        worker = turtle.RawTurtle(screen)
+        gridWorker = turtle.RawTurtle(screen)
+        worker.hideturtle()
+        gridWorker.hideturtle()
+        worker.penup()
+        worker.speed(0)
+        screen.bgcolor("black")
+        screen.colormode(255)
+        screen.tracer(False)
+        screen.setup(width=resolution[0], height=resolution[1])
         screen.ontimer(streamdata, int(1000 / fps))
+        mkbutton(10, 0, 5, 1, "END", exit)
+        mkbutton(120, 0, 5, 1, "SWPB", swapbanks)
+        screen.mainloop()
 
-    screen = turtle.Screen()
-    worker = turtle.RawTurtle(screen)
-    gridWorker = turtle.RawTurtle(screen)
-    worker.hideturtle()
-    gridWorker.hideturtle()
-    worker.penup()
-    worker.speed(0)
-    screen.bgcolor("black")
-    screen.colormode(255)
-    screen.tracer(False)
-    screen.setup(width=resolution[0], height=resolution[1])
-    screen.ontimer(streamdata, int(1000 / fps))
-    screen.mainloop()
+    except turtle.Terminator:
+        pass
 
 
 def test():
@@ -293,18 +313,18 @@ def test():
 
     system = [
         Sol,
+        Mercury,
         Venus,
-        Pluto,
+        Earth,
+        Lunar,
+        Mars,
+        Jupiter,
+        Saturn,
         Neptune,
         Uranus,
-        Saturn,
-        Jupiter,
-        Mars,
-        Earth,
-        Mercury,
-        Lunar,
+        Pluto,
     ]
-    datastream(system, 0.1, 60)
+    datastream([system], 0.1, 100, 10)
 
 
 if __name__ == "__main__":
