@@ -3,6 +3,7 @@ from Visualize import datastream
 from Visualize import Celestial
 
 subject = generate()
+sys_list = []
 for system in subject:
     for star in system.content:
         print(star.name)
@@ -32,5 +33,7 @@ for system in subject:
                     random_radian(),
                 )
                 vis_list.append(ceplanet)
+        sys_list.append(vis_list)
 
-        datastream(vis_list, 0.1, 100, 30)
+
+datastream(sys_list, 0.1, 100, 30)

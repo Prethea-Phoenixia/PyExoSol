@@ -119,6 +119,12 @@ class Celestial(object):
         self.pos = r_3d
         self.vel = v_3d
 
+    def setAsCenter(self, ephem):
+        negDelta = self.pos
+        delta = -1 * negDelta
+        for star in ephem:
+            star.pos += delta
+
 
 def datastream(constellation, dt, tps, fps):
     """dt:delta time,used for physical calculation
@@ -127,9 +133,9 @@ def datastream(constellation, dt, tps, fps):
         update per frame = tps / fps and should be positive integer.
         """
     import turtle
-    keep = True
-    try:
+    import tkinter as tk
 
+    def center_menu():
         def swapbanks():
             nonlocal ephem
             currpos = constellation.index(ephem)
@@ -138,33 +144,69 @@ def datastream(constellation, dt, tps, fps):
                 ephem = constellation[0]
             else:
                 ephem = constellation[currpos + 1]
+            nonlocal variable
+            nonlocal menu
+            menu['menu'].delete(0, "end")
+            new_options = []
+            for star in ephem:
+                new_options.append(star.name)
+            variable.set(new_options[0])
+            for choice in new_options:
+                menu['menu'].add_command(
+                    label=choice, command=tk._setit(variable, choice)
+                )
 
-        def exit():
-            nonlocal keep
-            keep = False
+        options = []
+        for star in ephem:
+            options.append(star.name)
+        canvas = turtle.getcanvas()
+        master = canvas.master
+        variable = tk.StringVar(master)
+        variable.set(options[0])
+        menu = tk.OptionMenu(master, variable, *options)
+        menu.pack(side="right")
+        tk.Label(master, text="Center").pack(side="right")
+        mkbutton("SWPB", swapbanks)
+        return variable
 
-        def mkbutton(x0, y0, l, h, text, func_if_clicked):
-            import tkinter as tk
-            from tkinter import font
+    scale = 100
+    keep = True
+    alert_swap = False
 
-            cal10 = font.Font(family="Calibri", size=12)
-            canvas = turtle.getcanvas()
-            parent = canvas.master
-            button = tk.Button(
-                parent, text=text, command=func_if_clicked, width=10, font=cal10,
-            ).pack(side=tk.LEFT)
-            id = canvas.create_window((x0, y0), window=button)
+    def scaleup():
+        nonlocal scale
+        scale *= 1.25
 
-        upf = int(tps / fps)
+    def scaledown():
+        nonlocal scale
+        scale /= 1.25
 
-        def streamdata():
+    def exit():
+        nonlocal keep
+        keep = False
+
+    def mkbutton(text, func_if_clicked):
+        canvas = turtle.getcanvas()
+        parent = canvas.master
+        button = tk.Button(parent, text=text, command=func_if_clicked, width=10,).pack(
+            side=tk.LEFT
+        )
+
+    upf = int(tps / fps)
+
+    def streamdata():
+        try:
             screen.onclick(None)
             for i in range(0, upf):
                 for system in constellation:
                     for star in system:
                         star.update(system, dt)
+            centerBody = menu_var.get()
+            for star in ephem:
+                if star.name == centerBody:
+                    star.setAsCenter(ephem)
             worker.clear()
-            worker.setpos(0, resolution[1] / 2)
+            worker.setpos(0, resolution[1] / 2 - 20)  # arbitary offset for first line.
 
             for star in ephem:
                 worker.setheading(270)
@@ -188,21 +230,28 @@ def datastream(constellation, dt, tps, fps):
                 gridWorker.goto(-resolution[0] / 4, 0)
                 gridWorker.setheading(90 + 135 * i)
                 gridWorker.pd()
-                if i != 1:
+                if i == 0:
                     gridWorker.fd(resolution[0] / 4)
-                else:
+                elif i == 1:
                     gridWorker.fd(resolution[0] / 4 / sqrt(2))
+                else:
+                    gridWorker.fd(resolution[0] / 4)
+                    gridWorker.write(
+                        str(round(resolution[0] / 4 / scale, 2)) + "AU",
+                        align="right",
+                        font=canonSetting,
+                    )
                 gridWorker.pu()
             for star in ephem:
                 gridWorker.color([5, 102, 8])
                 x, y, z = star.pos
-                projX = (-x / sqrt(2) + y) * 100
-                projY = (-x / sqrt(2) + z) * 100
+                projX = (-x / sqrt(2) + y) * scale
+                projY = (-x / sqrt(2) + z) * scale
                 gridWorker.goto(projX - resolution[0] / 4, projY)
                 gridWorker.dot(5, star.color)
                 gridWorker.pd()
                 gridWorker.setheading(270)
-                gridWorker.fd(z * 100)
+                gridWorker.fd(z * scale)
                 gridWorker.goto(-resolution[0] / 4, 0)
                 gridWorker.pu()
             screen.update()
@@ -210,26 +259,33 @@ def datastream(constellation, dt, tps, fps):
                 screen.ontimer(streamdata, int(1000 / fps))
             else:
                 screen.bye()
+            nonlocal alert_swap
+            if alert_swap:
+                alert_swap = False
+                resetmenu(menu)
 
-        ephem = constellation[0]
-        screen = turtle.Screen()
-        worker = turtle.RawTurtle(screen)
-        gridWorker = turtle.RawTurtle(screen)
-        worker.hideturtle()
-        gridWorker.hideturtle()
-        worker.penup()
-        worker.speed(0)
-        screen.bgcolor("black")
-        screen.colormode(255)
-        screen.tracer(False)
-        screen.setup(width=resolution[0], height=resolution[1])
-        screen.ontimer(streamdata, int(1000 / fps))
-        mkbutton(10, 0, 5, 1, "END", exit)
-        mkbutton(120, 0, 5, 1, "SWPB", swapbanks)
-        screen.mainloop()
+        except turtle.Terminator:
+            pass
 
-    except turtle.Terminator:
-        pass
+    ephem = constellation[0]
+    screen = turtle.Screen()
+    worker = turtle.RawTurtle(screen)
+    gridWorker = turtle.RawTurtle(screen)
+    worker.hideturtle()
+    gridWorker.hideturtle()
+    worker.penup()
+    worker.speed(0)
+    screen.bgcolor("black")
+    screen.colormode(255)
+    screen.tracer(False)
+    screen.setup(width=resolution[0], height=resolution[1])
+    screen.ontimer(streamdata, int(1000 / fps))
+    mkbutton("END", exit)
+
+    mkbutton("S+", scaleup)
+    mkbutton("S-", scaledown)
+    menu_var = center_menu()
+    screen.mainloop()
 
 
 def test():
